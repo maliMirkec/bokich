@@ -1,3 +1,9 @@
+.DS_Store
 .build/
-build/
 .swiftpm/
+build/
+dist/
+Resources/AppIcon.icns
+*.p12
+*.cer
+*.certSigningRequest

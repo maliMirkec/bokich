@@ -52,9 +52,15 @@ The menu bar icon smiles when Bokich is on and looks sad when it is off.
 
 ## Install
 
-Download the zip from GitHub Releases and move `Bokich.app` to Applications.
+Download the latest zip from [Releases](https://github.com/maliMirkec/bokich/releases), unzip it, and move `Bokich.app` to Applications.
 
-The app is self-signed, so macOS warns on first launch. Right-click the app, choose Open, then confirm. If that doesn't work, run:
+The app is self-signed, not notarized, so macOS blocks it on first launch:
+
+1. Open Bokich. macOS shows a warning. Click Done.
+2. Go to System Settings → Privacy & Security.
+3. Scroll down and click Open Anyway next to Bokich.
+
+Or remove the quarantine flag in Terminal:
 
 ```sh
 xattr -dr com.apple.quarantine /Applications/Bokich.app
@@ -80,6 +86,14 @@ open build/Bokich.app
 ```sh
 SIGN_ID="Bokich Dev" ./build.sh
 ```
+
+## Release
+
+1. Set the version in `Info.plist` (`CFBundleShortVersionString`) and add it to `CHANGELOG.md`.
+2. Run `./release.sh`. It signs with `Bokich Dev`, verifies the signature, and writes `dist/Bokich-<version>.zip`.
+3. Upload the zip to a new GitHub release.
+
+Always sign releases with the same certificate. Then Accessibility access survives updates.
 
 ## Limits
 
