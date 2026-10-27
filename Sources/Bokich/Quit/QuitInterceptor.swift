@@ -2,12 +2,15 @@ import AppKit
 
 final class QuitInterceptor {
   private static let qKeyCode: Int64 = 12
+  private static let wKeyCode: Int64 = 13
   private static let finderID = "com.apple.finder"
 
   private var tap: CFMachPort?
   private var source: CFRunLoopSource?
+  private var runLoop: CFRunLoop?
   var isEnabled: () -> Bool = { true }
   var onQuit: ((NSRunningApplication) -> Void)?
+  let closeQuitters = CloseQuitters()
 
   func start() {
     guard tap == nil else { return }
@@ -21,11 +24,34 @@ final class QuitInterceptor {
       callback: quitTapCallback,
       userInfo: refcon
     ) else { return }
-    let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-    CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-    CGEvent.tapEnable(tap: tap, enable: true)
+    guard let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) else { return }
     self.tap = tap
     self.source = source
+    let ready = DispatchSemaphore(value: 0)
+    let thread = Thread { [weak self] in
+      let loop = CFRunLoopGetCurrent()
+      self?.runLoop = loop
+      CFRunLoopAddSource(loop, source, .commonModes)
+      CGEvent.tapEnable(tap: tap, enable: true)
+      ready.signal()
+      CFRunLoopRun()
+    }
+    thread.name = "Bokich.QuitTap"
+    thread.qualityOfService = .userInteractive
+    thread.start()
+    ready.wait()
+  }
+
+  func stop() {
+    if let tap { CGEvent.tapEnable(tap: tap, enable: false) }
+    if let runLoop, let source {
+      CFRunLoopRemoveSource(runLoop, source, .commonModes)
+      CFRunLoopStop(runLoop)
+    }
+    if let tap { CFMachPortInvalidate(tap) }
+    tap = nil
+    source = nil
+    runLoop = nil
   }
 
   fileprivate func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
@@ -35,13 +61,20 @@ final class QuitInterceptor {
       return pass
     }
     guard type == .keyDown, isEnabled() else { return pass }
-    guard event.getIntegerValueField(.keyboardEventKeycode) == Self.qKeyCode else { return pass }
+    let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+    guard keyCode == Self.qKeyCode || keyCode == Self.wKeyCode else { return pass }
     let modifiers = event.flags.intersection([.maskCommand, .maskShift, .maskAlternate, .maskControl])
     guard modifiers == .maskCommand else { return pass }
-    if event.getIntegerValueField(.keyboardEventAutorepeat) != 0 { return nil }
     guard let app = NSWorkspace.shared.frontmostApplication,
           app.bundleIdentifier != Self.finderID,
           app.processIdentifier != getpid() else { return pass }
+    if keyCode == Self.wKeyCode {
+      guard closeQuitters.contains(app), CloseQuitters.windowCount(app.processIdentifier) == 1 else {
+        closeQuitters.noteClose(app)
+        return pass
+      }
+    }
+    if event.getIntegerValueField(.keyboardEventAutorepeat) != 0 { return nil }
     DispatchQueue.main.async { [weak self] in
       self?.onQuit?(app)
     }

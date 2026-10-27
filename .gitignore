@@ -7,3 +7,4 @@ Resources/AppIcon.icns
 *.p12
 *.cer
 *.certSigningRequest
+.claude/

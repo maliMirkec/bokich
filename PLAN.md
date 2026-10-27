@@ -188,8 +188,12 @@ No Screen Recording. No network.
 ### Permissions.swift
 
 - On launch, call `AXIsProcessTrustedWithOptions` with the prompt option.
-- If not trusted, retry every 2 s with a `Timer`.
-- When trusted, start `QuitInterceptor`.
+- Listen for the distributed notification `com.apple.accessibility.api`. It fires when the Accessibility list changes. Check 0.5 s later, since the value updates with a delay.
+- Backup timer: every 2 s while waiting for access, every 30 s once trusted. 20% tolerance, so macOS can group wakeups.
+- When access is granted, start `QuitInterceptor`.
+- When access is revoked, stop the tap right away. A stale tap can block keyboard input.
+- On every change, refresh the menu bar icon:
+  - No access: a small "!" badge on the icon, and the tooltip "Bokich needs Accessibility access".
 - Show state in the menu: "Needs Accessibility access" item that opens:
   `x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility`
 
@@ -214,11 +218,28 @@ Rules:
 
 Tap must stay fast. Never do work inside the callback.
 
+The tap runs on its own thread (`Bokich.QuitTap`) with its own run loop. If it ran on the main thread, a busy main thread could make macOS disable the tap. Then Cmd+Q reaches the app. Chromium browsers then show "Hold ⌘Q to quit" and cancel the quit.
+
+After `terminate()`, wait 2 s. If the app still runs, call `terminate()` once more. Apps with a save dialog keep the dialog.
+
 Handle tap shutdown:
 - If type is `.tapDisabledByTimeout` or `.tapDisabledByUserInput`, re-enable the tap.
 
 Respect the menu toggle:
 - If Bokich is disabled, pass the event through.
+
+### 7.1b CloseQuitters.swift
+
+Some apps quit when their last window closes, like System Settings and Calculator. For them, Cmd+W on the last window is a quit.
+
+- Key code `13` (W) with only Cmd held.
+- Handle it like Cmd+Q only when:
+  - the app is in `Settings.closeQuitters`, and
+  - AX shows exactly one window. The AX timeout is 0.2 s to keep the tap fast.
+- Otherwise pass it through and note the pid and time.
+- Learning: if an app terminates within 1.5 s of a passed Cmd+W, add its bundle ID to `closeQuitters`.
+- Seed list: `com.apple.systempreferences`, `com.apple.calculator`.
+- Other apps keep normal Cmd+W. They stay active after closing the last window, so no jump.
 
 ### 7.2 Quit flow steps
 
@@ -297,6 +318,8 @@ Fix:
 ### 7.5 SpaceAnchor.swift
 
 Used when no other window is on the Space.
+
+Where: the center of the quitting app's display. `WindowFinder.next` returns that display. If the app had no windows, use the display under the mouse. Never use Bokić's display, since it can be another screen.
 
 `hold(at:)`:
 
@@ -656,7 +679,8 @@ Apply style with a 0.3 s fade.
   - Enabled: happy face.
   - Disabled: sad face, dimmed. Tooltip says "Bokich (off)".
 - Items:
-  - **Enabled** (checkmark, shows ⌃⌥⌘0)
+  - **Enabled** (checkmark, shows the current shortcut)
+  - **Change Shortcut…**
   - **Show Bokić** (checkmark). Hides the buddy but keeps the quit fix.
   - **Reset Bokić Position**
   - **Launch at Login** (checkmark, `SMAppService.mainApp`)
@@ -667,15 +691,27 @@ Apply style with a 0.3 s fade.
   - separator
   - **Quit Bokich**
 
-### HotKey.swift
+### HotKey.swift and Shortcut.swift
 
-- Global shortcut ⌃⌥⌘0 toggles Enabled.
+- Global shortcut toggles Enabled. Default ⌃⌥⌘0.
 - Uses Carbon `RegisterEventHotKey`. It needs no Accessibility access.
-- macOS and popular apps don't use ⌃⌥⌘0 by default.
+- `Settings.shortcut` stores key code, modifiers, and the key character. `nil` means off.
+- `ShortcutController` registers it and re-registers after a change.
 - On toggle, Bokić reacts if visible:
   - On: happy squint and a "Bokich on" bubble.
   - Off: a "Bokich off" bubble.
 - While off, Bokić keeps a sad face. Clicks still morph and greet, but the face stays sad. It doesn't get sleepy.
+
+### ShortcutRecorder.swift
+
+Menu item **Change Shortcut…** opens a small panel.
+
+- The current shortcut is paused while the panel is open.
+- Press a new combo. It must include ⌃ or ⌥.
+- Esc or Cancel keeps the old shortcut.
+- **Use ⌃⌥⌘0** restores the default. **Turn Off** removes the shortcut.
+- If registration fails, show "That shortcut is taken" and keep the panel open.
+- The Enabled menu item shows the current shortcut.
 
 ---
 
@@ -787,7 +823,8 @@ Contrast:
 
 ## 18. Known limits
 
-- Only Cmd+Q is covered. Quitting from the Dock or app menu can still jump.
+- Only Cmd+Q, and Cmd+W in apps that quit on their last window, are covered. Quitting from the Dock or app menu can still jump.
+- The first Cmd+W in a new app that quits on its last window can still jump. Bokich learns the app and handles the next one.
 - Chrome's "Warn before quitting (⌘Q)" hold is bypassed. One press quits.
 - Uses a private API (`_AXUIElementGetWindow`). Fine for personal use. Not App Store safe.
 - Dynamic and video wallpapers use the fallback style.

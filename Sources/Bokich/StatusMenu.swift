@@ -5,10 +5,12 @@ final class StatusMenu: NSObject, NSMenuDelegate {
   private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
   private let menu = NSMenu()
   private let buddy: BuddyWindow
+  private let recorder: ShortcutRecorder
   private static let website = URL(string: "https://www.silvestar.codes")!
 
-  init(buddy: BuddyWindow) {
+  init(buddy: BuddyWindow, shortcuts: ShortcutController) {
     self.buddy = buddy
+    recorder = ShortcutRecorder(controller: shortcuts)
     super.init()
     updateIcon()
     menu.delegate = self
@@ -24,8 +26,11 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     menu.removeAllItems()
     let enabled = addItem("Enabled", #selector(toggleEnabled))
     enabled.state = Settings.enabled ? .on : .off
-    enabled.keyEquivalent = "0"
-    enabled.keyEquivalentModifierMask = [.control, .option, .command]
+    if let shortcut = Settings.shortcut {
+      enabled.keyEquivalent = shortcut.key
+      enabled.keyEquivalentModifierMask = shortcut.flags
+    }
+    addItem("Change Shortcut…", #selector(changeShortcut))
     addItem("Show Bokić", #selector(toggleBuddy)).state = Settings.showBuddy ? .on : .off
     addItem("Reset Bokić Position", #selector(resetPosition))
     addItem("Launch at Login", #selector(toggleLaunchAtLogin)).state = SMAppService.mainApp.status == .enabled ? .on : .off
@@ -51,6 +56,10 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     Settings.enabled.toggle()
     updateIcon()
     buddy.setEnabled(Settings.enabled)
+  }
+
+  @objc private func changeShortcut() {
+    recorder.show()
   }
 
   @objc private func toggleBuddy() {
@@ -111,13 +120,22 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     NSApp.terminate(nil)
   }
 
-  private func updateIcon() {
-    statusItem.button?.image = StatusMenu.makeIcon(enabled: Settings.enabled)
-    statusItem.button?.appearsDisabled = !Settings.enabled
-    statusItem.button?.toolTip = Settings.enabled ? "Bokich" : "Bokich (off)"
+  func refresh() {
+    updateIcon()
   }
 
-  static func makeIcon(enabled: Bool) -> NSImage {
+  private func updateIcon() {
+    let trusted = Permissions.isTrusted
+    statusItem.button?.image = StatusMenu.makeIcon(enabled: Settings.enabled, warning: !trusted)
+    statusItem.button?.appearsDisabled = !Settings.enabled
+    if !trusted {
+      statusItem.button?.toolTip = "Bokich needs Accessibility access"
+    } else {
+      statusItem.button?.toolTip = Settings.enabled ? "Bokich" : "Bokich (off)"
+    }
+  }
+
+  static func makeIcon(enabled: Bool, warning: Bool = false) -> NSImage {
     let size = NSSize(width: 18, height: 18)
     let image = NSImage(size: size, flipped: false) { rect in
       guard let context = NSGraphicsContext.current?.cgContext else { return false }
@@ -143,6 +161,13 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         control2: CGPoint(x: 9.9, y: enabled ? 6 : 8.2)
       )
       context.strokePath()
+      if warning {
+        context.setBlendMode(.clear)
+        context.fillEllipse(in: CGRect(x: 11.4, y: 11.4, width: 7, height: 7))
+        context.setBlendMode(.normal)
+        context.fill(CGRect(x: 14.2, y: 14.4, width: 1.4, height: 3.4))
+        context.fillEllipse(in: CGRect(x: 14.2, y: 12.2, width: 1.4, height: 1.4))
+      }
       return true
     }
     image.isTemplate = true

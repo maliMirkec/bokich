@@ -37,7 +37,8 @@ Bokić is a small blob that lives on your desktop, on every Space.
 
 ## Menu bar
 
-- **Enabled**: turn the quit fix on or off. Shortcut: ⌃⌥⌘0.
+- **Enabled**: turn the quit fix on or off. Default shortcut: ⌃⌥⌘0.
+- **Change Shortcut…**: pick another shortcut, or turn it off.
 - **Show Bokić**: show or hide the buddy. The quit fix keeps working.
 - **Reset Bokić Position**: move Bokić back to the top-right corner.
 - **Launch at Login**
@@ -97,7 +98,8 @@ Always sign releases with the same certificate. Then Accessibility access surviv
 
 ## Limits
 
-- Only Cmd+Q is covered. Quitting from the Dock or the app menu can still jump.
+- Only Cmd+Q, and Cmd+W in apps that quit on their last window, are covered. Quitting from the Dock or the app menu can still jump.
+- Bokich learns which apps quit on their last window. The first Cmd+W in such an app can still jump.
 - Finder is skipped, since it never really quits.
 - After quitting the last app on a Space, Bokich shows in the Dock until you switch apps.
 - Bokić uses a fallback style for video wallpapers, folder wallpapers, and missing wallpaper files.

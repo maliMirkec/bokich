@@ -6,12 +6,19 @@ struct WindowTarget {
   let bounds: CGRect
 }
 
+struct NextFocus {
+  let target: WindowTarget?
+  let display: CGDirectDisplayID?
+}
+
 enum WindowFinder {
   private static let minSize: CGFloat = 50
 
-  static func next(excluding pid: pid_t) -> WindowTarget? {
+  static func next(excluding pid: pid_t) -> NextFocus {
     let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
-    guard let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else { return nil }
+    guard let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
+      return NextFocus(target: nil, display: nil)
+    }
     let ownPID = getpid()
     var quittingBounds: CGRect?
     var candidates: [WindowTarget] = []
@@ -33,11 +40,11 @@ enum WindowFinder {
       candidates.append(WindowTarget(pid: owner, windowID: windowID, bounds: bounds))
     }
 
-    if let quittingBounds, let display = display(for: quittingBounds),
-       let match = candidates.first(where: { self.display(for: $0.bounds) == display }) {
-      return match
+    let quittingDisplay = quittingBounds.flatMap { display(for: $0) }
+    if let quittingDisplay, let match = candidates.first(where: { self.display(for: $0.bounds) == quittingDisplay }) {
+      return NextFocus(target: match, display: quittingDisplay)
     }
-    return candidates.first
+    return NextFocus(target: candidates.first, display: quittingDisplay)
   }
 
   private static func display(for rect: CGRect) -> CGDirectDisplayID? {

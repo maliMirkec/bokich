@@ -1,5 +1,4 @@
 import AppKit
-import Carbon
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
   private var statusMenu: StatusMenu?
@@ -7,19 +6,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private let interceptor = QuitInterceptor()
   private lazy var buddy = BuddyWindow()
   private let anchor = SpaceAnchor()
-  private var hotKey: HotKey?
+  private let shortcuts = ShortcutController()
 
   func applicationDidFinishLaunching(_ notification: Notification) {
-    statusMenu = StatusMenu(buddy: buddy)
-    hotKey = HotKey(keyCode: kVK_ANSI_0, modifiers: cmdKey | optionKey | controlKey) { [weak self] in
-      self?.statusMenu?.toggleEnabled()
-    }
+    statusMenu = StatusMenu(buddy: buddy, shortcuts: shortcuts)
+    shortcuts.action = { [weak self] in self?.statusMenu?.toggleEnabled() }
+    shortcuts.apply()
     if Settings.showBuddy {
       buddy.show()
     }
     interceptor.isEnabled = { Settings.enabled }
     interceptor.onQuit = { [weak self] app in self?.quit(app) }
-    permissions.onTrusted = { [weak self] in self?.interceptor.start() }
+    permissions.onChange = { [weak self] trusted in
+      guard let self else { return }
+      self.interceptor.stop()
+      if trusted { self.interceptor.start() }
+      self.statusMenu?.refresh()
+    }
     permissions.start()
   }
 
@@ -51,19 +54,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   private func finishQuit(_ app: NSRunningApplication) {
     let expected: pid_t
-    if let target = WindowFinder.next(excluding: app.processIdentifier) {
+    let next = WindowFinder.next(excluding: app.processIdentifier)
+    if let target = next.target {
       WindowFocuser.focus(target)
       expected = target.pid
     } else {
-      anchor.hold(at: NSPoint(x: buddy.frame.midX, y: buddy.frame.midY))
+      anchor.hold(at: anchorPoint(on: next.display))
       expected = getpid()
     }
     waitUntilFrontmost(expected, attempts: 30) {
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
         app.terminate()
         self.buddy.wink()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+          if !app.isTerminated { app.terminate() }
+        }
       }
     }
+  }
+
+  private func anchorPoint(on display: CGDirectDisplayID?) -> NSPoint {
+    let mouse = NSEvent.mouseLocation
+    let byDisplay = display.flatMap { id in NSScreen.screens.first { $0.displayID == Int(id) } }
+    let screen = byDisplay ?? NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) }
+    guard let screen else { return NSPoint(x: buddy.frame.midX, y: buddy.frame.midY) }
+    return NSPoint(x: screen.visibleFrame.midX, y: screen.visibleFrame.midY)
   }
 
   private func waitUntilFrontmost(_ pid: pid_t, attempts: Int, then action: @escaping () -> Void) {
