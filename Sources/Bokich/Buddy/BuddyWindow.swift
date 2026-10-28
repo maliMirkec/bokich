@@ -63,6 +63,12 @@ final class BuddyWindow: NSPanel {
     buddyView.wink()
   }
 
+  func greet() {
+    guard isVisible else { return }
+    say(reactions.nextGreeting())
+    buddyView.wink()
+  }
+
   func setVisible(_ visible: Bool) {
     if visible {
       show()

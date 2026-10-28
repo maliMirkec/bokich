@@ -22,6 +22,19 @@ enum WindowFocuser {
     return false
   }
 
+  static func lastUsedWindowID(_ pid: pid_t) -> CGWindowID? {
+    let app = AXUIElementCreateApplication(pid)
+    AXUIElementSetMessagingTimeout(app, 0.2)
+    for attribute in [kAXFocusedWindowAttribute, kAXMainWindowAttribute] {
+      var value: CFTypeRef?
+      guard AXUIElementCopyAttributeValue(app, attribute as CFString, &value) == .success,
+            let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { continue }
+      var id: CGWindowID = 0
+      if _AXUIElementGetWindow(value as! AXUIElement, &id) == .success, id != 0 { return id }
+    }
+    return nil
+  }
+
   static func focusApp(_ pid: pid_t) {
     DispatchQueue.global(qos: .userInteractive).async {
       let app = AXUIElementCreateApplication(pid)

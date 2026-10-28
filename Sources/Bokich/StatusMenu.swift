@@ -19,6 +19,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
   }
 
   func menuNeedsUpdate(_ menu: NSMenu) {
+    updateIcon()
     buildMenu()
   }
 
@@ -30,18 +31,53 @@ final class StatusMenu: NSObject, NSMenuDelegate {
       enabled.keyEquivalent = shortcut.key
       enabled.keyEquivalentModifierMask = shortcut.flags
     }
-    addItem("Change Shortcut…", #selector(changeShortcut))
     addItem("Show Bokić", #selector(toggleBuddy)).state = Settings.showBuddy ? .on : .off
     addItem("Reset Bokić Position", #selector(resetPosition))
+    addItem("Change Shortcut…", #selector(changeShortcut))
     addItem("Launch at Login", #selector(toggleLaunchAtLogin)).state = SMAppService.mainApp.status == .enabled ? .on : .off
-    if !Permissions.isTrusted {
-      addItem("Needs Accessibility Access…", #selector(openAccessibility))
-    }
+    menu.addItem(.separator())
+    addSetup()
     menu.addItem(.separator())
     addItem("About Bokich", #selector(showAbout))
     addItem("Made by Silvestar Bistrović", #selector(openWebsite))
     menu.addItem(.separator())
     addItem("Quit Bokich", #selector(quitApp))
+  }
+
+  private func addSetup() {
+    let checks = Setup.checks()
+    let required = checks.filter { $0.isRequired && !$0.isDone }.count
+    let tips = checks.filter { !$0.isRequired && !$0.isDone }.count
+    var title = "Setup"
+    if required > 0 {
+      title += ": \(required) to Fix"
+    } else if tips > 0 {
+      title += ": \(tips) \(tips == 1 ? "Tip" : "Tips")"
+    }
+    let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+    if required > 0 {
+      item.image = Self.symbol("exclamationmark.triangle.fill")
+    }
+    let submenu = NSMenu()
+    let groups = [("Required", checks.filter(\.isRequired)), ("Recommended", checks.filter { !$0.isRequired })]
+    for (header, group) in groups {
+      if submenu.numberOfItems > 0 { submenu.addItem(.separator()) }
+      submenu.addItem(NSMenuItem(title: header, action: nil, keyEquivalent: ""))
+      for check in group {
+        let entry = NSMenuItem(title: "\(check.title)…", action: #selector(openSetting), keyEquivalent: "")
+        entry.target = self
+        entry.representedObject = check.url
+        let name = check.isDone ? "checkmark.circle.fill" : check.isRequired ? "exclamationmark.triangle.fill" : "circle"
+        entry.image = Self.symbol(name)
+        submenu.addItem(entry)
+      }
+    }
+    item.submenu = submenu
+    menu.addItem(item)
+  }
+
+  private static func symbol(_ name: String) -> NSImage? {
+    NSImage(systemSymbolName: name, accessibilityDescription: nil)
   }
 
   @discardableResult
@@ -92,13 +128,14 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     }
   }
 
-  @objc private func openAccessibility() {
-    Permissions.openSettings()
+  @objc private func openSetting(_ sender: NSMenuItem) {
+    guard let url = sender.representedObject as? String else { return }
+    Setup.open(url)
   }
 
   @objc private func showAbout() {
     let credits = NSMutableAttributedString(
-      string: "Keeps you on your Space when you quit an app.\n\nMIT License\n",
+      string: "Keeps you on your Space. Follows the apps you pick.\n\nMIT License\n",
       attributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: NSColor.labelColor]
     )
     credits.append(NSAttributedString(

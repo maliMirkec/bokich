@@ -19,14 +19,6 @@ enum Settings {
     set { defaults.set(newValue, forKey: "showBuddy") }
   }
 
-  static var closeQuitters: Set<String> {
-    get {
-      let saved = defaults.stringArray(forKey: "closeQuitters") ?? []
-      return Set(saved).union(["com.apple.systempreferences", "com.apple.calculator"])
-    }
-    set { defaults.set(newValue.sorted(), forKey: "closeQuitters") }
-  }
-
   static var shortcut: Shortcut? {
     get {
       if defaults.bool(forKey: "shortcutOff") { return nil }

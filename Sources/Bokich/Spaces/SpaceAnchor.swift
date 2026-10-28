@@ -4,6 +4,8 @@ final class SpaceAnchor {
   private var window: AnchorWindow?
   private var observer: NSObjectProtocol?
 
+  var isHolding: Bool { window != nil }
+
   func hold(at point: NSPoint) {
     release()
     let window = AnchorWindow(
