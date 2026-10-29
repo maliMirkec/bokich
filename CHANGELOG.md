@@ -2,7 +2,9 @@
 
 ## 2.1.0
 
-Fixes for focus, app switching, and two screens.
+I noticed Bokich took focus from admin password prompts and from the iTerm update dialog. I fixed that, and then I fixed a lot more along the way.
+
+I haven't tested the two-screen fixes yet. If you use two screens, please open an issue and tell me how it went.
 
 Focus:
 
