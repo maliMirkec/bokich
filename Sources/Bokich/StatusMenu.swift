@@ -7,6 +7,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
   private let buddy: BuddyWindow
   private let recorder: ShortcutRecorder
   private static let website = URL(string: "https://www.silvestar.codes")!
+  var onToggle: ((Bool) -> Void)?
 
   init(buddy: BuddyWindow, shortcuts: ShortcutController) {
     self.buddy = buddy
@@ -92,6 +93,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     Settings.enabled.toggle()
     updateIcon()
     buddy.setEnabled(Settings.enabled)
+    onToggle?(Settings.enabled)
   }
 
   @objc private func changeShortcut() {
@@ -125,6 +127,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
       alert.informativeText = error.localizedDescription
       NSApp.activate(ignoringOtherApps: true)
       alert.runModal()
+      alert.window.close()
     }
   }
 

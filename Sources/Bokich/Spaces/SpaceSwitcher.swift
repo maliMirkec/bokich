@@ -9,6 +9,7 @@ struct SpaceKey {
     for down in [true, false] {
       let event = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: down)
       event?.flags = flags
+      event?.setIntegerValueField(.eventSourceUserData, value: InputWatcher.ownEventTag)
       event?.post(tap: .cghidEventTap)
     }
   }

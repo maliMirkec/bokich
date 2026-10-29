@@ -7,7 +7,8 @@ final class SpaceAnchor {
   var isHolding: Bool { window != nil }
 
   func hold(at point: NSPoint) {
-    release()
+    let wasHolding = isHolding
+    dropWindow()
     let window = AnchorWindow(
       contentRect: NSRect(origin: point, size: NSSize(width: 1, height: 1)),
       styleMask: [.borderless],
@@ -21,10 +22,13 @@ final class SpaceAnchor {
     window.isReleasedWhenClosed = false
     window.collectionBehavior = [.ignoresCycle]
     self.window = window
-    NSApp.setActivationPolicy(.regular)
+    if !wasHolding {
+      NSApp.setActivationPolicy(.regular)
+    }
     NSApp.activate(ignoringOtherApps: true)
     window.makeKeyAndOrderFront(nil)
     WindowFocuser.focusApp(getpid())
+    guard observer == nil else { return }
     observer = NotificationCenter.default.addObserver(
       forName: NSApplication.didResignActiveNotification,
       object: nil,
@@ -42,6 +46,10 @@ final class SpaceAnchor {
     if window != nil {
       NSApp.setActivationPolicy(.accessory)
     }
+    dropWindow()
+  }
+
+  private func dropWindow() {
     window?.orderOut(nil)
     window = nil
   }

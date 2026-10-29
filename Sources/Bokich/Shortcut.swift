@@ -65,6 +65,16 @@ struct Shortcut: Codable, Equatable {
     flags.contains(.control) || flags.contains(.option)
   }
 
+  var isSpaceShortcut: Bool {
+    let mask: CGEventFlags = [.maskControl, .maskAlternate, .maskShift, .maskCommand]
+    let ownFlags = CGEventFlags(rawValue: UInt64(flags.rawValue)).intersection(mask)
+    let desktops = (0..<SpaceSwitcher.numberedDesktops).map { SpaceSwitcher.firstDesktopID + $0 }
+    return ([SpaceSwitcher.leftID, SpaceSwitcher.rightID] + desktops).contains { id in
+      guard let key = SpaceSwitcher.shortcut(id) else { return false }
+      return Int(key.keyCode) == keyCode && key.flags.intersection(mask) == ownFlags
+    }
+  }
+
   init(keyCode: Int, modifiers: UInt, key: String) {
     self.keyCode = keyCode
     self.modifiers = modifiers
@@ -84,6 +94,9 @@ final class ShortcutController {
   @discardableResult
   func apply() -> Bool {
     hotKey = nil
+    if let saved = Settings.shortcut, saved.isSpaceShortcut, saved != .standard {
+      Settings.shortcut = .standard
+    }
     guard let shortcut = Settings.shortcut else { return true }
     hotKey = HotKey(keyCode: shortcut.keyCode, modifiers: shortcut.carbonModifiers, action: action)
     return hotKey != nil

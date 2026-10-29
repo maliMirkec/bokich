@@ -30,8 +30,12 @@ enum WindowFinder {
     }
   }
 
-  static func next(excluding pid: pid_t, in windows: [WindowTarget] = WindowFinder.onScreen()) -> NextFocus {
-    let quittingDisplay = windows.first { $0.pid == pid }.flatMap { display(for: $0.bounds) }
+  static func next(
+    excluding pid: pid_t,
+    in windows: [WindowTarget] = WindowFinder.onScreen(),
+    fallback: CGDirectDisplayID? = nil
+  ) -> NextFocus {
+    let quittingDisplay = windows.first { $0.pid == pid }.flatMap { display(for: $0.bounds) } ?? fallback
     let candidates = windows.filter {
       $0.pid != pid && $0.bounds.width > minSize && $0.bounds.height > minSize &&
         NSRunningApplication(processIdentifier: $0.pid)?.activationPolicy == .regular
@@ -45,7 +49,8 @@ enum WindowFinder {
   static func offScreen(of pid: pid_t, preferring preferred: CGWindowID? = nil) -> (window: WindowTarget, space: UInt64)? {
     let options: CGWindowListOption = [.optionAll, .excludeDesktopElements]
     guard var list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else { return nil }
-    for id in [WindowFocuser.lastUsedWindowID(pid), preferred].compactMap({ $0 }) {
+    let minimized = WindowFocuser.minimizedWindowIDs(pid)
+    for id in [preferred, WindowFocuser.lastUsedWindowID(pid)].compactMap({ $0 }) {
       guard let index = list.firstIndex(where: { $0[kCGWindowNumber as String] as? CGWindowID == id }) else { continue }
       list.insert(list.remove(at: index), at: 0)
     }
@@ -54,6 +59,7 @@ enum WindowFinder {
             info[kCGWindowLayer as String] as? Int == 0,
             info[kCGWindowIsOnscreen as String] as? Bool != true,
             let windowID = info[kCGWindowNumber as String] as? CGWindowID,
+            !minimized.contains(windowID),
             let boundsInfo = info[kCGWindowBounds as String] as? NSDictionary,
             let bounds = CGRect(dictionaryRepresentation: boundsInfo),
             bounds.width > minSize, bounds.height > minSize,
@@ -71,10 +77,23 @@ enum WindowFinder {
     windows.contains { $0.pid == pid && $0.bounds.width > minSize && $0.bounds.height > minSize }
   }
 
-  static func windows(onDisplay id: CGDirectDisplayID, in windows: [WindowTarget] = WindowFinder.onScreen()) -> [WindowTarget] {
+  static func isPanel(_ id: CGWindowID) -> Bool {
+    guard let info = (CGWindowListCopyWindowInfo(.optionIncludingWindow, id) as? [[String: Any]])?.first,
+          info[kCGWindowIsOnscreen as String] as? Bool == true,
+          let layer = info[kCGWindowLayer as String] as? Int, layer > 0,
+          let boundsInfo = info[kCGWindowBounds as String] as? NSDictionary,
+          let bounds = CGRect(dictionaryRepresentation: boundsInfo) else { return false }
+    return bounds.width > minSize && bounds.height > minSize
+  }
+
+  static func windows(
+    onDisplay id: CGDirectDisplayID?,
+    in windows: [WindowTarget] = WindowFinder.onScreen(),
+    includeAgents: Bool = false
+  ) -> [WindowTarget] {
     windows.filter {
-      $0.bounds.width > minSize && $0.bounds.height > minSize && display(for: $0.bounds) == id &&
-        NSRunningApplication(processIdentifier: $0.pid)?.activationPolicy == .regular
+      $0.bounds.width > minSize && $0.bounds.height > minSize && (id == nil || display(for: $0.bounds) == id) &&
+        (includeAgents || NSRunningApplication(processIdentifier: $0.pid)?.activationPolicy == .regular)
     }
   }
 

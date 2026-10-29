@@ -87,8 +87,13 @@ final class ShortcutRecorder: NSObject, NSWindowDelegate {
       warn("Add ⌃ or ⌥ to the shortcut.")
       return
     }
+    guard !shortcut.isSpaceShortcut else {
+      warn("macOS uses that shortcut to switch Spaces.")
+      return
+    }
     save(shortcut)
   }
+
 
   private func save(_ shortcut: Shortcut?) {
     let previous = Settings.shortcut

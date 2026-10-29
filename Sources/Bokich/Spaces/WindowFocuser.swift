@@ -8,12 +8,14 @@ enum WindowFocuser {
   @discardableResult
   static func focus(_ target: WindowTarget) -> Bool {
     let app = AXUIElementCreateApplication(target.pid)
+    AXUIElementSetMessagingTimeout(app, 0.5)
     var value: CFTypeRef?
     guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &value) == .success,
           let windows = value as? [AXUIElement] else { return false }
     for window in windows {
       var id: CGWindowID = 0
       guard _AXUIElementGetWindow(window, &id) == .success, id == target.windowID else { continue }
+      AXUIElementSetMessagingTimeout(window, 0.5)
       AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
       AXUIElementPerformAction(window, kAXRaiseAction as CFString)
       AXUIElementSetAttributeValue(app, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
@@ -33,6 +35,24 @@ enum WindowFocuser {
       if _AXUIElementGetWindow(value as! AXUIElement, &id) == .success, id != 0 { return id }
     }
     return nil
+  }
+
+  static func minimizedWindowIDs(_ pid: pid_t) -> Set<CGWindowID> {
+    let app = AXUIElementCreateApplication(pid)
+    AXUIElementSetMessagingTimeout(app, 0.2)
+    var value: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &value) == .success,
+          let windows = value as? [AXUIElement] else { return [] }
+    var result: Set<CGWindowID> = []
+    for window in windows {
+      var minimized: CFTypeRef?
+      var id: CGWindowID = 0
+      guard AXUIElementCopyAttributeValue(window, kAXMinimizedAttribute as CFString, &minimized) == .success,
+            (minimized as? Bool) == true,
+            _AXUIElementGetWindow(window, &id) == .success else { continue }
+      result.insert(id)
+    }
+    return result
   }
 
   static func focusApp(_ pid: pid_t) {

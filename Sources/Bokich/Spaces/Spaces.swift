@@ -47,8 +47,16 @@ enum Spaces {
 
   static func mouseDisplayIdentifier() -> String? {
     let mouse = NSEvent.mouseLocation
-    guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }),
-          let id = screen.displayID,
+    guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) else { return nil }
+    return identifier(of: screen)
+  }
+
+  static func screen(for identifier: String) -> NSScreen? {
+    NSScreen.screens.first { Self.identifier(of: $0)?.caseInsensitiveCompare(identifier) == .orderedSame }
+  }
+
+  private static func identifier(of screen: NSScreen) -> String? {
+    guard let id = screen.displayID,
           let uuid = CGDisplayCreateUUIDFromDisplayID(CGDirectDisplayID(id))?.takeRetainedValue() else { return nil }
     return CFUUIDCreateString(nil, uuid) as String
   }

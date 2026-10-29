@@ -15,13 +15,14 @@ final class BuddyWindow: NSPanel {
   init() {
     let frame = NSRect(x: 0, y: 0, width: Self.size, height: Self.size)
     buddyView = BuddyView(frame: frame)
-    super.init(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
+    super.init(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
     backgroundColor = .clear
     isOpaque = false
     hasShadow = false
     level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
     collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
     hidesOnDeactivate = false
+    becomesKeyOnlyIfNeeded = true
     isReleasedWhenClosed = false
     contentView = buddyView
     buddyView.onDragStart = { [weak self] in

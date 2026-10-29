@@ -123,7 +123,7 @@ Always sign releases with the same certificate. Then Accessibility access surviv
 
 ## Limits
 
-- Bokich follows an app only if you pressed a key or clicked less than a second before it became active. Apps that activate themselves are not followed.
+- Bokich follows an app only if you used Cmd+Tab, pressed Return, used another app's global shortcut, or clicked less than a second before it became active. Typing and normal shortcuts like Cmd+C don't count. Apps that activate themselves are not followed.
 - Following an app is animated, since macOS has no instant switch. Reduce motion makes it shorter.
 - With Ctrl+← and Ctrl+→, Bokich only switches Spaces on the display under the mouse. Turn on Ctrl+1 to Ctrl+9 for two screens.
 - Ctrl+1 to Ctrl+9 reach desktops 1 to 9. Full-screen apps and later desktops use Ctrl+← and Ctrl+→.
