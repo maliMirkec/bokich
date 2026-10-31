@@ -2,6 +2,7 @@ import AppKit
 
 final class SpaceFollower {
   private static let inputWindow: TimeInterval = 1
+  private static let switchKeyWindow: TimeInterval = 2.5
   private static let leaveWindow: TimeInterval = 2
   private static let settleDelay: TimeInterval = 0.5
   private static let leaveDelay: TimeInterval = 0.15
@@ -89,15 +90,20 @@ final class SpaceFollower {
       takeOver(excluding: left?.processIdentifier)
       return
     }
-    guard causedByUser(pid, at: time) else {
-      Log.follow.debug("skip: no recent key or click")
-      return
+    let caused = causedByUser(pid, at: time)
+    if caused {
+      pendingFollow = pid
+    } else {
+      Log.follow.debug("no recent key or click yet: check again")
     }
-    pendingFollow = pid
     DispatchQueue.main.asyncAfter(deadline: .now() + Self.settleDelay) { [weak self] in
       guard let self else { return }
       if self.pendingFollow == pid { self.pendingFollow = nil }
       guard self.isEnabled() else { return }
+      guard caused || self.causedByUser(pid, at: time) else {
+        Log.follow.debug("skip: no recent key or click")
+        return
+      }
       guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else {
         Log.follow.debug("skip: \(Log.name(pid), privacy: .public) no longer front")
         return
@@ -124,7 +130,7 @@ final class SpaceFollower {
   }
 
   private func causedByUser(_ pid: pid_t, at time: Date) -> Bool {
-    if input.isSwitchKey(near: time, within: Self.inputWindow) {
+    if input.isSwitchKey(near: time, within: Self.switchKeyWindow) {
       Log.input.debug("switch key near activation")
       return true
     }
@@ -141,8 +147,17 @@ final class SpaceFollower {
       Log.follow.debug("skip: another switch is running")
       return
     }
-    if WindowFinder.hasVisibleWindow(pid) || isDialog(NSRunningApplication(processIdentifier: pid)) {
-      Log.follow.debug("skip: \(Log.name(pid), privacy: .public) has a window on screen")
+    let dialog = isDialog(NSRunningApplication(processIdentifier: pid))
+    if let window = WindowFinder.visibleWindow(of: pid, preferring: lastWindows[pid]) {
+      Log.follow.debug("no switch: \(Log.name(pid), privacy: .public) has window \(window.windowID, privacy: .public) on screen, dialog \(dialog, privacy: .public)")
+      if !dialog {
+        let raised = WindowFocuser.focus(window)
+        Log.follow.debug("raised window: \(raised, privacy: .public)")
+      }
+      return
+    }
+    if dialog {
+      Log.follow.debug("skip: dialog is front")
       return
     }
     guard let found = WindowFinder.offScreen(of: pid, preferring: lastWindows[pid]) else {

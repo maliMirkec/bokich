@@ -20,7 +20,8 @@ final class SpaceSwitcher {
   static let rightID = 81
   static let firstDesktopID = 118
   static let numberedDesktops = 9
-  private static let timeout: TimeInterval = 1.5
+  private static let timeout: TimeInterval = 3
+  private static let pollInterval: TimeInterval = 0.05
   private static let standard: [Int: SpaceKey] = [
     leftID: SpaceKey(keyCode: 123, flags: [.maskControl, .maskSecondaryFn]),
     rightID: SpaceKey(keyCode: 124, flags: [.maskControl, .maskSecondaryFn])
@@ -42,7 +43,7 @@ final class SpaceSwitcher {
     if let number = desktops.firstIndex(where: { $0.id == space }), number < Self.numberedDesktops,
        let key = Self.shortcut(Self.firstDesktopID + number) {
       Log.switcher.debug("press Desktop \(number + 1, privacy: .public) shortcut")
-      press(key, times: 1, then: done)
+      press(key, times: 1, on: display.identifier, then: done)
       return
     }
     guard isUnderMouse(display) else {
@@ -54,7 +55,7 @@ final class SpaceSwitcher {
       return done(false)
     }
     Log.switcher.debug("press arrow \(abs(target - current), privacy: .public) times")
-    press(key, times: abs(target - current), then: done)
+    press(key, times: abs(target - current), on: display.identifier, then: done)
   }
 
   private func isUnderMouse(_ display: DisplaySpaces) -> Bool {
@@ -62,31 +63,30 @@ final class SpaceSwitcher {
     return Spaces.mouseDisplayIdentifier()?.caseInsensitiveCompare(display.identifier) == .orderedSame
   }
 
-  private func press(_ key: SpaceKey, times: Int, then done: @escaping (Bool) -> Void) {
+  private func press(_ key: SpaceKey, times: Int, on display: String, then done: @escaping (Bool) -> Void) {
     guard times > 0 else { return done(true) }
-    waitForSpaceChange { [weak self] changed in
-      guard changed else { return done(false) }
-      self?.press(key, times: times - 1, then: done)
-    }
+    let before = currentSpace(on: display)
+    let start = Date()
     key.post()
+    waitForSpaceChange(on: display, from: before, until: start.addingTimeInterval(Self.timeout)) { [weak self] changed in
+      let elapsed = Date().timeIntervalSince(start)
+      Log.switcher.debug("Space changed \(changed, privacy: .public) after \(elapsed, privacy: .public)s")
+      guard changed else { return done(false) }
+      self?.press(key, times: times - 1, on: display, then: done)
+    }
   }
 
-  private func waitForSpaceChange(then action: @escaping (Bool) -> Void) {
-    let center = NSWorkspace.shared.notificationCenter
-    var token: NSObjectProtocol?
-    var done = false
-    let finish = { (changed: Bool) in
-      guard !done else { return }
-      done = true
-      if let token { center.removeObserver(token) }
-      action(changed)
+  private func waitForSpaceChange(on display: String, from before: UInt64?, until deadline: Date, then action: @escaping (Bool) -> Void) {
+    if currentSpace(on: display) != before { return action(true) }
+    guard Date() < deadline else { return action(false) }
+    DispatchQueue.main.asyncAfter(deadline: .now() + Self.pollInterval) { [weak self] in
+      guard let self else { return }
+      self.waitForSpaceChange(on: display, from: before, until: deadline, then: action)
     }
-    token = center.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main) { _ in
-      finish(true)
-    }
-    DispatchQueue.main.asyncAfter(deadline: .now() + Self.timeout) {
-      finish(false)
-    }
+  }
+
+  private func currentSpace(on display: String) -> UInt64? {
+    Spaces.displays().first { $0.identifier == display }?.current
   }
 
   static func shortcut(_ id: Int) -> SpaceKey? {

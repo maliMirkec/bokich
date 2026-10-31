@@ -114,16 +114,55 @@ SIGN_ID="Bokich Dev" ./build.sh
 
 ## Release
 
-1. Set the version in `Info.plist` (`CFBundleShortVersionString`) and add it to `CHANGELOG.md`.
-2. Run `./release.sh`. It signs with `Bokich Dev`, verifies the signature, and writes `dist/Bokich-<version>.zip`.
-3. Upload the zip to a new GitHub release.
-4. Copy `dist/bokich.rb` to `Casks/bokich.rb` in the [homebrew-tap](https://github.com/maliMirkec/homebrew-tap) repo and push it.
+You need the `Bokich Dev` certificate, the [GitHub CLI](https://cli.github.com), and a clone of [homebrew-tap](https://github.com/maliMirkec/homebrew-tap) next to this repo.
+
+1. Add your changes to `CHANGELOG.md` under `## Unreleased`.
+2. Prepare the release. The script sets the version and build number, names the changelog section, signs with `Bokich Dev`, and writes the files to `dist/`. It doesn't commit or publish anything.
+
+   ```sh
+   ./prepare-release.sh 2.1.1
+   ```
+
+3. Commit and push:
+
+   ```sh
+   git add -A
+   git commit -m "Version 2.1.1 - What changed."
+   git push
+   ```
+
+4. Create the GitHub release. This also creates the tag.
+
+   ```sh
+   gh release create v2.1.1 dist/Bokich-2.1.1.zip --title "Bokich 2.1.1" --notes-file dist/release-notes.md --target main
+   ```
+
+5. Update the cask:
+
+   ```sh
+   cd ../homebrew-tap
+   git pull
+   cp ../bokich/dist/bokich.rb Casks/bokich.rb
+   git add Casks/bokich.rb
+   git commit -m "Bokich 2.1.1"
+   git push
+   ```
+
+6. Install it with Homebrew and check the version:
+
+   ```sh
+   brew update
+   brew upgrade --cask bokich
+   plutil -extract CFBundleShortVersionString raw /Applications/Bokich.app/Contents/Info.plist
+   ```
+
+Do step 4 before step 5. The cask points to the zip, so it fails until the zip is online.
 
 Always sign releases with the same certificate. Then Accessibility access survives updates.
 
 ## Limits
 
-- Bokich follows an app only if you used Cmd+Tab, pressed Return, used another app's global shortcut, or clicked less than a second before it became active. Typing and normal shortcuts like Cmd+C don't count. Apps that activate themselves are not followed.
+- Bokich follows an app only if you used Cmd+Tab, pressed Return, used another app's global shortcut in the 2.5 seconds around it becoming active, or clicked less than a second around it. Typing and normal shortcuts like Cmd+C don't count. Apps that activate themselves are not followed.
 - Following an app is animated, since macOS has no instant switch. Reduce motion makes it shorter.
 - With Ctrl+← and Ctrl+→, Bokich only switches Spaces on the display under the mouse. Turn on Ctrl+1 to Ctrl+9 for two screens.
 - Ctrl+1 to Ctrl+9 reach desktops 1 to 9. Full-screen apps and later desktops use Ctrl+← and Ctrl+→.

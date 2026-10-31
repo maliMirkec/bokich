@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.1
+
+- Bokich follows Cmd+Tab again. macOS hides the Cmd release from Bokich, so Bokich now looks for a key press it could not see.
+- Bokich follows a quick Cmd+Tab and a Dock click it sees late.
+- Bokich raises the app's window when it is already on the current Space, so it doesn't stay behind other windows.
+- Bokich ignores small popup windows when it looks for an app's window.
+- Bokich focuses the app's window even when macOS is slow to report the Space change.
+
 ## 2.1.0
 
 I noticed Bokich took focus from admin password prompts and from the iTerm update dialog. I fixed that, and then I fixed a lot more along the way.

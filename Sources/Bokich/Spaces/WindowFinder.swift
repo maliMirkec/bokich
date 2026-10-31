@@ -12,7 +12,7 @@ struct NextFocus {
 }
 
 enum WindowFinder {
-  private static let minSize: CGFloat = 50
+  private static let minSize: CGFloat = 100
 
   static func onScreen() -> [WindowTarget] {
     let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
@@ -71,6 +71,11 @@ enum WindowFinder {
 
   static func topWindow(of pid: pid_t, in windows: [WindowTarget] = WindowFinder.onScreen()) -> CGWindowID? {
     windows.first { $0.pid == pid && $0.bounds.width > minSize && $0.bounds.height > minSize }?.windowID
+  }
+
+  static func visibleWindow(of pid: pid_t, preferring preferred: CGWindowID? = nil) -> WindowTarget? {
+    let own = onScreen().filter { $0.pid == pid && $0.bounds.width > minSize && $0.bounds.height > minSize }
+    return own.first { $0.windowID == preferred } ?? own.first
   }
 
   static func hasVisibleWindow(_ pid: pid_t, in windows: [WindowTarget] = WindowFinder.onScreen()) -> Bool {

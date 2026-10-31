@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 
 struct Click {
   let time: Date
@@ -9,6 +10,7 @@ struct Click {
 struct KeyPress {
   private static let leaveKeys: Set<UInt16> = [12, 13, 4, 46]
   private static let enterKeys: Set<UInt16> = [36, 76]
+  private static let tabKey: UInt16 = 48
 
   let time: Date
   let keyCode: UInt16
@@ -21,6 +23,10 @@ struct KeyPress {
   var isEnter: Bool {
     Self.enterKeys.contains(keyCode)
   }
+
+  var isCommandTab: Bool {
+    flags.contains(.command) && keyCode == Self.tabKey
+  }
 }
 
 final class InputWatcher {
@@ -28,11 +34,13 @@ final class InputWatcher {
   private static let switchModifiers: NSEvent.ModifierFlags = [.command, .control, .option]
   private static let blindMargin: TimeInterval = 0.1
   private static let staleHold: TimeInterval = 10
+  private static let hiddenKeyAge: TimeInterval = 0.3
 
   private(set) var lastKeyPress: KeyPress?
   private(set) var lastClick: Click?
   private var lastSwitchKey: Date?
   private var lastSeenKey: Date?
+  private var lastSeenKeyDown: Date?
   private var modifierDown: Date?
   private var sawModifiedKey = false
   private var monitors: [Any] = []
@@ -48,9 +56,16 @@ final class InputWatcher {
     let sinceFlags = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .flagsChanged)
     let sinceKeyDown = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown)
     let sinceSeen = lastSeenKey.map { now.timeIntervalSince($0) } ?? .infinity
+    let sinceSeenKeyDown = lastSeenKeyDown.map { now.timeIntervalSince($0) } ?? .infinity
+    let secure = IsSecureEventInputEnabled()
+    let keyDownAge = sinceKeyDown - now.timeIntervalSince(time)
+    if !secure, sinceKeyDown >= Self.hiddenKeyAge, sinceKeyDown < sinceSeenKeyDown - Self.blindMargin, abs(keyDownAge) < window {
+      Log.input.debug("hidden key down \(keyDownAge, privacy: .public)s before activation, last seen key down \(sinceSeenKeyDown, privacy: .public)s ago")
+      return true
+    }
     guard min(sinceFlags, sinceKeyDown) < sinceSeen - Self.blindMargin else { return false }
     let flagsAge = sinceFlags - now.timeIntervalSince(time)
-    Log.input.debug("keys hidden from Bokich, modifier \(flagsAge, privacy: .public)s ago")
+    Log.input.debug("keys hidden from Bokich, modifier \(flagsAge, privacy: .public)s ago, key down \(sinceKeyDown, privacy: .public)s ago, last seen \(sinceSeen, privacy: .public)s ago, secure input \(secure, privacy: .public)")
     return sinceFlags <= sinceKeyDown && abs(flagsAge) < window
   }
 
@@ -85,9 +100,11 @@ final class InputWatcher {
       return
     }
     if modifierDown != nil { sawModifiedKey = true }
+    lastSeenKeyDown = now
     let press = KeyPress(time: now, keyCode: event.keyCode, flags: event.modifierFlags)
     lastKeyPress = press
-    if press.isEnter { lastSwitchKey = now }
+    if press.isCommandTab { Log.input.debug("saw Cmd+Tab") }
+    if press.isEnter || press.isCommandTab { lastSwitchKey = now }
   }
 
   private func modifiersChanged(_ held: NSEvent.ModifierFlags, at now: Date) {
@@ -101,7 +118,9 @@ final class InputWatcher {
     defer { modifierDown = nil }
     guard let down = modifierDown, now.timeIntervalSince(down) < Self.staleHold, !sawModifiedKey else { return }
     let sinceKeyDown = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown)
-    if sinceKeyDown < now.timeIntervalSince(down) {
+    let heldFor = now.timeIntervalSince(down)
+    Log.input.debug("modifiers released after \(heldFor, privacy: .public)s, key down \(sinceKeyDown, privacy: .public)s ago")
+    if sinceKeyDown < heldFor {
       lastSwitchKey = now
     }
   }
